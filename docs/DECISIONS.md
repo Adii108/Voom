@@ -205,3 +205,82 @@ Each entry documents a significant architectural or technology decision, includi
 - Extra layer of indirection for simple requests
 
 **At larger scale:** Would add React Query or SWR for caching, deduplication, and background refetching.
+
+---
+
+## D010: `meeting_code` Separate from Database `id`
+
+**Decision:** Use a randomly generated, human-readable `meeting_code` (e.g., `VOM-482-917`) as the public identifier, never exposing the auto-increment `id`.
+
+**Alternatives considered:**
+1. Use the database `id` directly in URLs
+2. Use UUIDs as primary keys
+
+**Why this approach:**
+- Auto-increment IDs leak information (sequential = guessable, reveals total count)
+- Meeting codes are memorable and easy to share verbally
+- UUIDs are too long for users to type or read aloud
+- The database `id` remains available for efficient internal joins and foreign keys
+
+**Trade-offs:**
+- Must ensure uniqueness of generated codes (handled by UNIQUE constraint + retry)
+- Extra column and index
+
+---
+
+## D011: Meeting Status and Type Enums
+
+**Decision:** Add `status` (waiting/active/ended) and `meeting_type` (instant/scheduled) columns to the meetings table.
+
+**Alternatives considered:**
+1. Derive status from timestamps only (e.g., if `scheduled_at < now` then "past")
+2. Use a single `is_active` boolean
+
+**Why this approach:**
+- Explicit status is clearer than timestamp arithmetic, especially for instant meetings that have no `scheduled_at`
+- Enables straightforward queries: `WHERE status = 'waiting'` for upcoming, `WHERE status = 'ended'` for recent
+- `meeting_type` allows different UI/logic for instant vs scheduled meetings
+- Python `str` enums serialize to JSON naturally
+
+**Trade-offs:**
+- Status must be updated explicitly (e.g., when a meeting ends)
+
+---
+
+## D012: Participants as a Separate Entity from Users
+
+**Decision:** Model participants as their own table, linked to meetings, with an optional link to users.
+
+**Alternatives considered:**
+1. Many-to-many join table between users and meetings
+2. Store participant list as JSON in the meeting row
+
+**Why this approach:**
+- Guests can join without an account (nullable `user_id`)
+- Each participant record captures session-specific data (`display_name`, `joined_at`)
+- A user might use a different display name in different meetings
+- Proper relational modeling avoids JSON anti-patterns in SQL
+
+**Trade-offs:**
+- More rows to manage than a JSON array
+- Need to query a separate table for participant counts
+
+---
+
+## D013: Default User Instead of Authentication
+
+**Decision:** Seed a default user on startup and use it for all operations.
+
+**Alternatives considered:**
+1. Build full JWT authentication before features
+2. Skip user model entirely
+
+**Why this approach:**
+- Assignment explicitly states login is not required
+- Having a real User record means foreign keys work correctly
+- The architecture is auth-ready — adding login later means swapping the `DEFAULT_USER_ID` with the authenticated user's ID
+- Skipping the user model would mean meetings have no host, breaking the relational model
+
+**Trade-offs:**
+- All meetings appear to be created by the same user
+- No multi-user isolation
