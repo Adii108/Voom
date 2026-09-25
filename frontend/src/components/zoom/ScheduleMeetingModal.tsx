@@ -15,7 +15,7 @@ export function ScheduleMeetingModal({
   onClose,
   onMeetingScheduled,
 }: ScheduleMeetingModalProps) {
-  const [topic, setTopic] = useState("Alex Morgan's Zoom Meeting");
+  const [topic, setTopic] = useState("Aditya Umre's Zoom Meeting");
   const [description, setDescription] = useState("");
   
   // Format today's date YYYY-MM-DD

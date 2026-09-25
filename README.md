@@ -205,7 +205,7 @@ Next, I implemented the relational database layer using SQLAlchemy 2.0. I design
 
 I made several intentional architectural decisions during this phase. I separated `participants` from `users` so that guests could join calls with just a display name without being forced to create an account. I separated the public `meeting_code` from the internal auto-incrementing database `id` to prevent URL guessing and data enumeration. I also created `MeetingStatus` (waiting, active, ended) and `MeetingType` (instant, scheduled) enums to give the application clear lifecycle tracking.
 
-I created an idempotent database seeder in `backend/app/database.py` that automatically populates a default user (Alex Morgan) and realistic upcoming and past meetings on application launch.
+I created an idempotent database seeder in `backend/app/database.py` that automatically populates a default user (Aditya Umre) and realistic upcoming and past meetings on application launch.
 
 ### Phase 4: Meeting APIs
 
@@ -582,7 +582,7 @@ An alternative was placing database queries directly inside route handler functi
 
 ### Default User Strategy Without Authentication
 
-I chose to seed a default user (`Alex Morgan`, ID: 1) on startup rather than implementing a full authentication system with sign-up and login screens.
+I chose to seed a default user (`Aditya Umre`, ID: 1) on startup rather than implementing a full authentication system with sign-up and login screens.
 
 The assignment explicitly stated that authentication was not required. Skipping login screens allowed full development focus to remain on meeting creation, scheduling, room management, and WebRTC streaming. However, instead of using magic strings for hosts, I built a real `User` table and linked meetings via a genuine `host_id` foreign key. This makes the architecture completely auth-ready: adding JWT authentication in the future simply requires replacing the default user ID with the authenticated session's user ID.
 
@@ -798,7 +798,7 @@ Render's free tier operates on ephemeral container instances. When the backend c
 
 This project is an authentic implementation focused on core meeting workflows and peer-to-peer video streaming. A few features were intentionally simplified or omitted in line with the assignment scope:
 
-User Authentication: The application operates using a seeded default user (`Alex Morgan`). There are no sign-up, login, or password recovery screens.
+User Authentication: The application operates using a seeded default user (`Aditya Umre`). There are no sign-up, login, or password recovery screens.
 
 Mesh WebRTC Scalability: The application uses a peer-to-peer mesh architecture where each client streams directly to other peers. Mesh topologies work well for one-on-one and small group calls (up to 3 or 4 peers), but do not scale to large 20+ participant conferences because each participant must encode and upload multiple video streams simultaneously.
 

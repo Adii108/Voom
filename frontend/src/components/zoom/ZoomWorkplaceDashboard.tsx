@@ -56,7 +56,7 @@ export function ZoomWorkplaceDashboard({
   const [instantMeetingData, setInstantMeetingData] = useState<Meeting | null>(null);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
   const [joinCodeInput, setJoinCodeInput] = useState("");
-  const [joinDisplayName, setJoinDisplayName] = useState("Alex Morgan");
+  const [joinDisplayName, setJoinDisplayName] = useState("Aditya Umre");
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
 
@@ -295,7 +295,7 @@ export function ZoomWorkplaceDashboard({
               className="flex items-center gap-2 p-1 rounded-xl hover:bg-black/5 transition-all focus:outline-none"
             >
               <div className="relative w-8 h-8 rounded-full bg-[#0E71EB] text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                <span>AM</span>
+                <span>AU</span>
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#00A859] border-2 border-white rounded-full" />
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-[#667085]" />
@@ -305,8 +305,8 @@ export function ZoomWorkplaceDashboard({
             {isProfileMenuOpen && (
               <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-[#E1E4EA] p-2 z-50 animate-in fade-in slide-in-from-top-2">
                 <div className="px-3 py-2.5 border-b border-[#F0F2F5]">
-                  <div className="text-xs font-semibold text-[#131619]">Alex Morgan</div>
-                  <div className="text-[11px] text-[#667085]">alex.morgan@zoom.us</div>
+                  <div className="text-xs font-semibold text-[#131619]">Aditya Umre</div>
+                  <div className="text-[11px] text-[#667085]">aditya.umre@zoom.us</div>
                   <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     <span>Licensed Account</span>

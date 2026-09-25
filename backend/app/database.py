@@ -56,12 +56,16 @@ def seed_default_user():
         user = db.query(User).filter(User.id == DEFAULT_USER_ID).first()
         if not user:
             user = User(
-                name="Alex Morgan",
-                email="alex.morgan@zoom.us",
+                name="Aditya Umre",
+                email="aditya.umre@zoom.us",
             )
             db.add(user)
             db.commit()
             db.refresh(user)
+        else:
+            user.name = "Aditya Umre"
+            user.email = "aditya.umre@zoom.us"
+            db.commit()
 
         # Seed sample meetings if none exist or recent is empty
         recent_count = db.query(Meeting).filter(Meeting.status.in_([MeetingStatus.ENDED, MeetingStatus.ACTIVE])).count()
