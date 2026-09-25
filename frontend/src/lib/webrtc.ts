@@ -45,34 +45,47 @@ export const RTC_CONFIG: RTCConfiguration = {
 };
 
 export interface WebRTCPeerHandlers {
-  onTrack: (stream: MediaStream) => void;
+  onTrack: (event: RTCTrackEvent) => void;
   onIceCandidate: (candidate: RTCIceCandidate) => void;
   onConnectionStateChange?: (state: RTCPeerConnectionState) => void;
+  onIceConnectionStateChange?: (state: RTCIceConnectionState) => void;
+  onSignalingStateChange?: (state: RTCSignalingState) => void;
 }
 
 export function createPeerConnection(handlers: WebRTCPeerHandlers): RTCPeerConnection {
   const pc = new RTCPeerConnection(RTC_CONFIG);
 
   pc.ontrack = (event) => {
-    if (event.streams && event.streams[0]) {
-      handlers.onTrack(event.streams[0]);
-    } else if (event.track) {
-      const stream = new MediaStream([event.track]);
-      handlers.onTrack(stream);
-    }
+    console.log(
+      `[WebRTC] REMOTE TRACK RECEIVED: kind=${event.track.kind}, id=${event.track.id}, streams=${event.streams.length}`
+    );
+    handlers.onTrack(event);
   };
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
+      console.log(`[WebRTC] ICE CANDIDATE GENERATED: ${event.candidate.candidate.substring(0, 50)}...`);
       handlers.onIceCandidate(event.candidate);
+    } else {
+      console.log("[WebRTC] ICE candidate gathering complete (null candidate)");
     }
   };
 
-  if (handlers.onConnectionStateChange) {
-    pc.onconnectionstatechange = () => {
-      handlers.onConnectionStateChange?.(pc.connectionState);
-    };
-  }
+  pc.onconnectionstatechange = () => {
+    console.log(`[WebRTC] PEER CONNECTION STATE: ${pc.connectionState}`);
+    handlers.onConnectionStateChange?.(pc.connectionState);
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    console.log(`[WebRTC] ICE CONNECTION STATE: ${pc.iceConnectionState}`);
+    handlers.onIceConnectionStateChange?.(pc.iceConnectionState);
+  };
+
+  pc.onsignalingstatechange = () => {
+    console.log(`[WebRTC] SIGNALING STATE: ${pc.signalingState}`);
+    handlers.onSignalingStateChange?.(pc.signalingState);
+  };
 
   return pc;
 }
+

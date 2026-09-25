@@ -341,3 +341,23 @@ Each entry documents a significant architectural or technology decision, includi
 **Trade-offs:**
 - Backdrop blur requires modern browser GPU support
 
+---
+
+## D017: WebRTC Transceiver Synchronization & Deterministic Negotiation Flow
+
+**Decision:** Adopt modern WebRTC Unified Plan transceiver management without dummy `sendrecv` transceivers, combined with deterministic offer initiation (`participantId < peer.id`) and polite-peer rollback handling.
+
+**Alternatives considered:**
+1. Blindly creating `pc.addTransceiver("video", { direction: "sendrecv" })` and `pc.addTransceiver("audio", { direction: "sendrecv" })` on connection creation regardless of whether local tracks exist.
+2. Having both peers initiate calls concurrently upon receiving `peer-joined` or seeing an active peer.
+3. Plan B legacy SDP semantics.
+
+**Why this approach:**
+- In WebRTC 1.0 (Unified Plan), adding an empty `sendrecv` transceiver creates an m-section with `sender.track = null`. Subsequent calls to `pc.addTrack(...)` cannot reuse this transceiver and create a *second* set of m-sections. This caused an asymmetric transmission failure where Device B received and rendered the dummy track while Device A received Device B's real track.
+- Attaching local tracks directly via `pc.addTrack(track, localStream)` when media is present ensures a 1:1 mapping between local tracks and SDP m-sections. If media is not yet resolved, `direction: "recvonly"` allows `sender.replaceTrack(track)` to subsequently reuse the existing m-section without generating duplicate transceivers.
+- Deterministic initiation (`participantId < peer.id`) prevents offer/answer collisions (glare) and race conditions when participants join simultaneously.
+- Polite peer rollback (`pc.setLocalDescription({ type: "rollback" })`) provides a resilient fail-safe adhering to the W3C Perfect Negotiation pattern.
+
+**Trade-offs:**
+- Requires careful transceiver state synchronization in React when `localStream` state updates asynchronously (e.g., when the user grants camera/mic permissions).
+
