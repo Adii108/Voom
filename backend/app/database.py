@@ -31,3 +31,35 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# Default user ID used throughout the application when no
+# authentication is implemented. Defined as a constant so it's
+# easy to find and replace when adding real auth.
+DEFAULT_USER_ID = 1
+
+
+def seed_default_user():
+    """Create a default user if the users table is empty.
+
+    This is called during application startup. The default user
+    acts as the "logged-in" user for all operations since the
+    assignment does not require authentication.
+
+    The function is idempotent — safe to call on every startup.
+    """
+    # Import here to avoid circular imports (models import Base from this module)
+    from app.models.user import User
+
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter(User.id == DEFAULT_USER_ID).first()
+        if not existing:
+            default_user = User(
+                name="Default User",
+                email="user@voom.app",
+            )
+            db.add(default_user)
+            db.commit()
+    finally:
+        db.close()

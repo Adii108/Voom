@@ -16,7 +16,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import Base, engine
+from app.database import Base, engine, seed_default_user
+import app.models  # noqa: F401 — import so Base.metadata discovers all tables
 from app.routes.health import router as health_router
 from app.routes.meetings import router as meetings_router
 
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
     auto-creation is acceptable and reduces setup friction.
     """
     Base.metadata.create_all(bind=engine)
+    seed_default_user()
     yield
 
 
