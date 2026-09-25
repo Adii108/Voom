@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/*
+ * Global styles for the Voom application.
+ * Uses the Inter font loaded via next/font/google.
+ */
+
+body {
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+}

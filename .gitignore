@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+backend/venv/
+
+# Database
+*.db
+
+# Environment files (contain secrets)
+.env
+.env.local
+!.env.example
+!.env.local.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# Build
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Auto-generated agent rules (Next.js)
+AGENTS.md
+CLAUDE.md
