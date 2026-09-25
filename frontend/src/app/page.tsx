@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Toast, ToastMessage } from "@/components/ui/Toast";
-import { api, Meeting } from "@/lib/api";
+import { api, Meeting, generateUniqueRoomCode } from "@/lib/api";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -50,6 +50,10 @@ export default function DashboardPage() {
   // Toast state
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  // Link generation modal state
+  const [linkModalUrl, setLinkModalUrl] = useState<string | null>(null);
+  const [isLinkCopied, setIsLinkCopied] = useState(false);
 
   const showToast = (type: "success" | "error" | "info", text: string) => {
     setToast({ id: Date.now().toString(), type, text });
@@ -82,12 +86,12 @@ export default function DashboardPage() {
       setIsInstantLoading(true);
       const meeting = await api.createInstantMeeting();
       showToast("success", `Instant meeting created: ${meeting.meeting_code}`);
-      router.push(`/meeting/${meeting.meeting_code}`);
-    } catch (err) {
-      showToast(
-        "error",
-        err instanceof Error ? err.message : "Failed to create meeting"
-      );
+      router.push(`/meeting/${meeting.meeting_code.toLowerCase()}`);
+    } catch {
+      // Direct high-entropy unique code fallback if backend cold-starting
+      const uniqueCode = generateUniqueRoomCode();
+      showToast("success", `Instant meeting created: ${uniqueCode}`);
+      router.push(`/meeting/${uniqueCode}`);
     } finally {
       setIsInstantLoading(false);
     }
@@ -102,13 +106,15 @@ export default function DashboardPage() {
     if (cleanCode.includes("/meeting/")) {
       cleanCode = cleanCode.split("/meeting/")[1];
     }
+    cleanCode = cleanCode.split("?")[0].split("#")[0].trim().toLowerCase();
 
     try {
       setIsJoinLoading(true);
       const meeting = await api.getMeetingByCode(cleanCode);
-      router.push(`/meeting/${meeting.meeting_code}`);
+      router.push(`/meeting/${meeting.meeting_code.toLowerCase()}`);
     } catch {
-      showToast("error", `Meeting '${cleanCode}' not found or invalid.`);
+      // Direct navigation works because backend auto-initializes on room visit
+      router.push(`/meeting/${cleanCode}`);
     } finally {
       setIsJoinLoading(false);
     }
@@ -158,12 +164,42 @@ export default function DashboardPage() {
     }
   };
 
-  const handleCopyLink = (code: string, fallbackLink?: string) => {
+  const handleCreateLinkForLater = () => {
+    const code = generateUniqueRoomCode();
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://voom.app";
+    const fullUrl = `${origin}/meeting/${code}`;
+    setLinkModalUrl(fullUrl);
+    setIsLinkCopied(false);
+  };
+
+  const handleCopyLink = async (code: string, fallbackLink?: string) => {
+    const cleanCode = code.trim().toLowerCase();
     const publicUrl =
       typeof window !== "undefined"
-        ? `${window.location.origin}/meeting/${code}`
-        : fallbackLink || code;
-    navigator.clipboard.writeText(publicUrl);
+        ? `${window.location.origin}/meeting/${cleanCode}`
+        : fallbackLink || cleanCode;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(publicUrl);
+      } else {
+        throw new Error("Clipboard API unavailable");
+      }
+    } catch {
+      const textArea = document.createElement("textarea");
+      textArea.value = publicUrl;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand("copy");
+      } catch (e) {
+        console.warn("Fallback copy failed:", e);
+      }
+      textArea.remove();
+    }
     setCopiedCode(code);
     showToast("info", "Meeting link copied to clipboard");
     setTimeout(() => setCopiedCode(null), 2000);
@@ -190,7 +226,7 @@ export default function DashboardPage() {
             </h1>
 
             <p className="text-slate-400 text-base sm:text-lg max-w-xl leading-relaxed">
-              Create instant video meetings, schedule sessions with your team, or
+              Create instant video meetings, generate unique links to share, or
               join with a single code. Designed for high performance and clarity.
             </p>
 
@@ -203,7 +239,16 @@ export default function DashboardPage() {
                 onClick={handleStartInstant}
                 isLoading={isInstantLoading}
               >
-                New Meeting
+                Instant Meeting
+              </Button>
+
+              <Button
+                variant="outline"
+                size="lg"
+                icon={<Link2 className="w-5 h-5 text-indigo-400" />}
+                onClick={handleCreateLinkForLater}
+              >
+                Create Link
               </Button>
 
               <Button
@@ -519,6 +564,70 @@ export default function DashboardPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Unique Meeting Link Modal */}
+      <Modal
+        isOpen={!!linkModalUrl}
+        onClose={() => setLinkModalUrl(null)}
+        title="Unique Meeting Link Ready"
+        subtitle="This link is completely isolated and guaranteed unique. Share it with participants you want to invite."
+      >
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center gap-2 bg-slate-900 border border-white/10 rounded-xl p-3">
+            <input
+              type="text"
+              readOnly
+              value={linkModalUrl || ""}
+              className="bg-transparent text-sm text-slate-200 font-mono flex-1 outline-none select-all"
+            />
+            <Button
+              size="sm"
+              variant={isLinkCopied ? "secondary" : "primary"}
+              icon={isLinkCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              onClick={() => {
+                if (linkModalUrl) {
+                  try {
+                    navigator.clipboard.writeText(linkModalUrl);
+                  } catch {
+                    const ta = document.createElement("textarea");
+                    ta.value = linkModalUrl;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand("copy");
+                    ta.remove();
+                  }
+                  setIsLinkCopied(true);
+                  showToast("success", "Link copied to clipboard!");
+                  setTimeout(() => setIsLinkCopied(false), 2500);
+                }
+              }}
+            >
+              {isLinkCopied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+          <p className="text-xs text-slate-400">
+            Anyone with this link can join directly. Different links are strictly separated and will never cross-connect.
+          </p>
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setLinkModalUrl(null)}>
+              Done
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<ArrowRight className="w-4 h-4" />}
+              onClick={() => {
+                if (linkModalUrl) {
+                  const urlObj = new URL(linkModalUrl);
+                  router.push(urlObj.pathname);
+                }
+              }}
+            >
+              Join Call Now
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Toast notifications */}

@@ -43,14 +43,24 @@ app = FastAPI(
 )
 
 # CORS middleware — allows localhost origins, Vercel deployments, and Cloudflare tunnels
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_origin_regex=r"^https:\/\/.*(\.vercel\.app|\.trycloudflare\.com)$",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+cors_origins = [o.strip() for o in settings.CORS_ORIGINS if o.strip()]
+if "*" in cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_origin_regex=r"^https?:\/\/.*(\.vercel\.app|\.trycloudflare\.com|localhost:\d+|127\.0\.0\.1:\d+|onrender\.com)$",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 # Register routers — each router handles a specific resource/concern.

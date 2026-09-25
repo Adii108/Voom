@@ -36,12 +36,23 @@ interface ChatMessage {
 export default function MeetingRoomPage() {
   const params = useParams();
   const router = useRouter();
-  const meetingCode = (params?.meetingId as string) || "";
+  const rawMeetingId = (params?.meetingId as string) || "";
+  const meetingCode = rawMeetingId.trim().toLowerCase();
 
-  // Unique participant ID for this browser tab
+  // Unique, session-stable participant ID for this browser tab in this meeting
   const participantIdRef = useRef<string>("");
   if (!participantIdRef.current) {
-    participantIdRef.current = `user-${Math.random().toString(36).substring(2, 9)}`;
+    if (typeof window !== "undefined") {
+      const storageKey = `voom_pid_${meetingCode || "default"}`;
+      let saved = sessionStorage.getItem(storageKey);
+      if (!saved) {
+        saved = `user-${Math.random().toString(36).substring(2, 9)}`;
+        sessionStorage.setItem(storageKey, saved);
+      }
+      participantIdRef.current = saved;
+    } else {
+      participantIdRef.current = `user-${Math.random().toString(36).substring(2, 9)}`;
+    }
   }
   const participantId = participantIdRef.current;
 
@@ -247,6 +258,9 @@ export default function MeetingRoomPage() {
     }
   }, []);
 
+  // WebRTC negotiation lock
+  const isNegotiatingRef = useRef<boolean>(false);
+
   // Initialize or get RTCPeerConnection
   const getOrCreatePeerConnection = useCallback(() => {
     if (pcRef.current) return pcRef.current;
@@ -268,10 +282,23 @@ export default function MeetingRoomPage() {
     });
 
     // Add local tracks to peer connection
+    let hasTracks = false;
     if (localStream) {
       localStream.getTracks().forEach((track) => {
         pc.addTrack(track, localStream);
+        hasTracks = true;
       });
+    }
+
+    // If localStream is empty/in-use by another tab, add receive-only transceivers
+    // so this session can still negotiate and receive video/audio!
+    if (!hasTracks) {
+      try {
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: "recvonly" });
+      } catch (e) {
+        console.warn("Transceiver fallback:", e);
+      }
     }
 
     pcRef.current = pc;
@@ -279,16 +306,20 @@ export default function MeetingRoomPage() {
   }, [localStream, sendSignalMessage]);
 
   // Start WebRTC offer as initiator
-  const startCallAsInitiator = useCallback(async () => {
+  const startCallAsInitiator = useCallback(async (targetId?: string | null) => {
+    if (isNegotiatingRef.current) return;
+    isNegotiatingRef.current = true;
     isInitiatorRef.current = true;
     const pc = getOrCreatePeerConnection();
 
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await sendSignalMessage("offer", offer);
+      await sendSignalMessage("offer", offer, targetId);
     } catch (err) {
       console.error("Error creating WebRTC offer:", err);
+    } finally {
+      isNegotiatingRef.current = false;
     }
   }, [getOrCreatePeerConnection, sendSignalMessage]);
 
@@ -305,23 +336,32 @@ export default function MeetingRoomPage() {
       if (!isPolling) return;
       try {
         const response = await api.getSignals(meetingCode, participantId, displayName);
+        if (!isPolling) return;
 
         for (const msg of response.messages) {
           if (msg.sender_id === participantId) continue;
 
           switch (msg.type) {
-            case "peer-joined":
-            case "join": {
+            case "peer-joined": {
               setRemotePeerName(msg.sender_name || "Remote Participant");
               showToast("info", `${msg.sender_name || "A participant"} entered the room`);
               // Host / earlier participant initiates the WebRTC offer
-              await startCallAsInitiator();
+              await startCallAsInitiator(msg.sender_id);
               break;
             }
 
             case "offer": {
               setRemotePeerName(msg.sender_name || "Remote Participant");
               const pc = getOrCreatePeerConnection();
+              // Glare resolution via perfect negotiation tie-breaker:
+              const isPolite = participantId < msg.sender_id;
+              if (pc.signalingState !== "stable") {
+                if (!isPolite) {
+                  // Impolite peer ignores colliding offer; polite peer will handle ours
+                  break;
+                }
+                await pc.setLocalDescription({ type: "rollback" } as any);
+              }
               await pc.setRemoteDescription(new RTCSessionDescription(msg.data));
               await drainIceCandidates(pc);
 
@@ -333,7 +373,7 @@ export default function MeetingRoomPage() {
 
             case "answer": {
               const pc = getOrCreatePeerConnection();
-              if (pc.signalingState !== "stable") {
+              if (pc.signalingState === "have-local-offer") {
                 await pc.setRemoteDescription(new RTCSessionDescription(msg.data));
                 await drainIceCandidates(pc);
               }
@@ -400,11 +440,36 @@ export default function MeetingRoomPage() {
 
     pollSignals();
 
+    // Fast-poll on tab visibility change (recovering from background throttling)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isPolling) {
+        pollSignals();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       isPolling = false;
-      api.leaveRoom(meetingCode, participantId).catch(() => {});
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      // Do NOT call leaveRoom here; only call it on actual page departure
     };
   }, [hasJoined, meetingCode, participantId, displayName, sendSignalMessage, startCallAsInitiator, getOrCreatePeerConnection, drainIceCandidates]);
+
+  // Gracefully leave room when tab closes or unmounts
+  useEffect(() => {
+    if (!meetingCode || !participantId) return;
+
+    const handleBeforeUnload = () => {
+      api.leaveRoom(meetingCode, participantId).catch(() => {});
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      api.leaveRoom(meetingCode, participantId).catch(() => {});
+    };
+  }, [meetingCode, participantId]);
 
   // Join handler
   const handleJoin = async (e: React.FormEvent) => {
@@ -515,10 +580,31 @@ export default function MeetingRoomPage() {
   };
 
 
-  // Copy shareable public link
-  const handleCopyLink = () => {
+  // Copy shareable public link with reliable fallback
+  const handleCopyLink = async () => {
     const link = getShareableLink();
-    navigator.clipboard.writeText(link);
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        throw new Error("Clipboard API unavailable");
+      }
+    } catch {
+      const textArea = document.createElement("textarea");
+      textArea.value = link;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand("copy");
+      } catch (e) {
+        console.warn("Fallback copy failed:", e);
+      }
+      textArea.remove();
+    }
     setIsCopied(true);
     showToast("info", "Public meeting link copied to clipboard!");
     setTimeout(() => setIsCopied(false), 2500);
@@ -558,6 +644,7 @@ export default function MeetingRoomPage() {
       pcRef.current.close();
       pcRef.current = null;
     }
+    api.leaveRoom(meetingCode, participantId).catch(() => {});
     setHasJoined(false);
     router.push("/");
   };

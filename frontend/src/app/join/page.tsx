@@ -30,13 +30,14 @@ export default function JoinPage() {
     if (cleanCode.includes("/meeting/")) {
       cleanCode = cleanCode.split("/meeting/")[1];
     }
+    cleanCode = cleanCode.split("?")[0].split("#")[0].trim().toLowerCase();
 
     try {
       setIsLoading(true);
       const meeting = await api.getMeetingByCode(cleanCode);
-      router.push(`/meeting/${meeting.meeting_code}`);
+      router.push(`/meeting/${meeting.meeting_code.toLowerCase()}`);
     } catch {
-      showToast("error", `Meeting '${cleanCode}' not found. Please check the code.`);
+      router.push(`/meeting/${cleanCode}`);
     } finally {
       setIsLoading(false);
     }

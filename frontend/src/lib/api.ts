@@ -8,10 +8,30 @@
  * On the server (SSR): falls back to NEXT_PUBLIC_API_URL or http://127.0.0.1:8000.
  */
 
-const API_BASE =
+const rawBase =
   process.env.NEXT_PUBLIC_API_URL ||
   (typeof window !== "undefined" ? "" : "http://127.0.0.1:8000");
+const API_BASE = rawBase.replace(/\/+$/, "");
 
+export function generateUniqueRoomCode(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const getRandomPart = (len: number) => {
+    let res = "";
+    if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+      const bytes = new Uint8Array(len);
+      window.crypto.getRandomValues(bytes);
+      for (let i = 0; i < len; i++) {
+        res += chars[bytes[i] % chars.length];
+      }
+    } else {
+      for (let i = 0; i < len; i++) {
+        res += chars[Math.floor(Math.random() * chars.length)];
+      }
+    }
+    return res;
+  };
+  return `vom-${getRandomPart(3)}-${getRandomPart(4)}-${getRandomPart(3)}`;
+}
 
 export interface Participant {
   id: number;
@@ -107,48 +127,58 @@ export const api = {
   /** Get recent meetings list */
   getRecentMeetings: () => request<Meeting[]>("/api/meetings/recent"),
 
-  /** Lookup meeting details by code */
-  getMeetingByCode: (code: string) =>
-    request<Meeting>(`/api/meetings/${encodeURIComponent(code)}`),
+  /** Lookup meeting details by code (normalized lowercase) */
+  getMeetingByCode: (code: string) => {
+    const clean = code.trim().toLowerCase();
+    return request<Meeting>(`/api/meetings/${encodeURIComponent(clean)}`);
+  },
 
   /** Join a meeting with a display name */
-  joinMeeting: (code: string, displayName: string) =>
-    request<JoinMeetingResponse>(
-      `/api/meetings/${encodeURIComponent(code)}/join`,
+  joinMeeting: (code: string, displayName: string) => {
+    const clean = code.trim().toLowerCase();
+    return request<JoinMeetingResponse>(
+      `/api/meetings/${encodeURIComponent(clean)}/join`,
       {
         method: "POST",
         body: JSON.stringify({ display_name: displayName }),
       }
-    ),
+    );
+  },
 
   /** Post a WebRTC signaling message */
-  sendSignal: (code: string, payload: SignalMessagePayload) =>
-    request<{ status: string; recipients: number; active_peers: Array<{ id: string; name: string }> }>(
-      `/api/meetings/${encodeURIComponent(code)}/signal`,
+  sendSignal: (code: string, payload: SignalMessagePayload) => {
+    const clean = code.trim().toLowerCase();
+    return request<{ status: string; recipients: number; active_peers: Array<{ id: string; name: string }> }>(
+      `/api/meetings/${encodeURIComponent(clean)}/signal`,
       {
         method: "POST",
         body: JSON.stringify(payload),
       }
-    ),
+    );
+  },
 
   /** Poll for pending WebRTC signaling messages */
-  getSignals: (code: string, participantId: string, participantName: string) =>
-    request<{
+  getSignals: (code: string, participantId: string, participantName: string) => {
+    const clean = code.trim().toLowerCase();
+    return request<{
       messages: SignalMessagePayload[];
       active_peers: Array<{ id: string; name: string }>;
       server_time: number;
     }>(
-      `/api/meetings/${encodeURIComponent(code)}/signal?participant_id=${encodeURIComponent(
+      `/api/meetings/${encodeURIComponent(clean)}/signal?participant_id=${encodeURIComponent(
         participantId
       )}&participant_name=${encodeURIComponent(participantName)}`
-    ),
+    );
+  },
 
   /** Leave meeting room signaling */
-  leaveRoom: (code: string, participantId: string) =>
-    request<{ status: string }>(
-      `/api/meetings/${encodeURIComponent(code)}/leave?participant_id=${encodeURIComponent(
+  leaveRoom: (code: string, participantId: string) => {
+    const clean = code.trim().toLowerCase();
+    return request<{ status: string }>(
+      `/api/meetings/${encodeURIComponent(clean)}/leave?participant_id=${encodeURIComponent(
         participantId
       )}`,
-      { method: "POST" }
-    ),
+      { method: "POST", keepalive: true }
+    );
+  },
 };

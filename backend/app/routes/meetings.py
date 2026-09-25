@@ -101,19 +101,15 @@ def list_recent_meetings(db: Session = Depends(get_db)):
     summary="Get meeting by code",
 )
 def get_meeting(meeting_code: str, db: Session = Depends(get_db)):
-    """Retrieve meeting details by its public meeting code.
+    """Retrieve meeting details by its public meeting code (case-insensitive).
 
-    Returns 404 if the meeting code doesn't exist.
-    This endpoint is used when:
-    - Loading the meeting room page
-    - Validating a meeting code before joining
+    Auto-creates the meeting record if it does not exist so that direct
+    shared links are immediately usable without 404 failures.
     """
-    meeting = meeting_service.get_meeting_by_code(db, meeting_code)
+    clean_code = meeting_code.strip().lower()
+    meeting = meeting_service.get_meeting_by_code(db, clean_code)
     if not meeting:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Meeting '{meeting_code}' not found",
-        )
+        meeting = meeting_service.create_instant_meeting_with_code(db, clean_code)
     return meeting
 
 
@@ -130,22 +126,20 @@ def join_meeting(
 ):
     """Join a meeting by code with a display name.
 
-    Flow:
-    1. Validate meeting exists (404 if not)
-    2. Create participant record
-    3. Return meeting details + participant info
-
-    The display_name is validated by Pydantic (1-100 chars).
+    If meeting record does not exist in DB yet, it is created automatically.
     """
+    clean_code = meeting_code.strip().lower()
     result = meeting_service.join_meeting(
         db=db,
-        meeting_code=meeting_code,
+        meeting_code=clean_code,
         display_name=request.display_name,
     )
     if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Meeting '{meeting_code}' not found",
+        meeting_service.create_instant_meeting_with_code(db, clean_code)
+        result = meeting_service.join_meeting(
+            db=db,
+            meeting_code=clean_code,
+            display_name=request.display_name,
         )
     meeting, participant = result
     return JoinMeetingResponse(

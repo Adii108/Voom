@@ -27,6 +27,9 @@ export function createPeerConnection(handlers: WebRTCPeerHandlers): RTCPeerConne
   pc.ontrack = (event) => {
     if (event.streams && event.streams[0]) {
       handlers.onTrack(event.streams[0]);
+    } else if (event.track) {
+      const stream = new MediaStream([event.track]);
+      handlers.onTrack(stream);
     }
   };
 

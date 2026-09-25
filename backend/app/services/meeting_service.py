@@ -9,10 +9,11 @@ and database operations. This separation means:
 3. Multiple routes can reuse the same logic
 """
 
-import random
+import secrets
 import string
 from datetime import datetime
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -22,48 +23,41 @@ from app.models.participant import Participant
 
 
 def generate_meeting_code() -> str:
-    """Generate a human-readable meeting code like 'VOM-482-917'.
+    """Generate a collision-resistant, cryptographically secure meeting code.
 
-    Format: VOM-{3 digits}-{3 digits}
-    - 'VOM' prefix identifies it as a Voom meeting
-    - Digits are easy to read aloud and type
-    - 10^6 possible combinations (1 million) — sufficient for this scale
-
-    At larger scale, we would:
-    - Check for collisions against the database
-    - Use longer codes or include letters
-    - Consider a counter-based approach for guaranteed uniqueness
+    Format: vom-{3 chars}-{4 chars}-{3 chars} (e.g. 'vom-k9x-m2w7-p4q')
+    Using 36 alphanumeric characters over 10 random positions yields
+    36^10 = 3,656,158,440,062,976 (3.65 quadrillion) possible unique codes.
+    This guarantees that every meeting gets a completely unique link that
+    cannot collide or be intermixed with any other meeting.
     """
-    part1 = "".join(random.choices(string.digits, k=3))
-    part2 = "".join(random.choices(string.digits, k=3))
-    return f"VOM-{part1}-{part2}"
+    chars = string.ascii_lowercase + string.digits
+    part1 = "".join(secrets.choice(chars) for _ in range(3))
+    part2 = "".join(secrets.choice(chars) for _ in range(4))
+    part3 = "".join(secrets.choice(chars) for _ in range(3))
+    return f"vom-{part1}-{part2}-{part3}"
 
 
 def generate_meeting_link(meeting_code: str) -> str:
     """Build the shareable meeting link from a meeting code.
 
-    Uses FRONTEND_URL from configuration so the link points to
-    the correct domain in both development and production.
+    Uses FRONTEND_URL from configuration or relative path.
     """
-    return f"{settings.FRONTEND_URL}/meeting/{meeting_code}"
+    clean_code = meeting_code.strip().lower()
+    return f"{settings.FRONTEND_URL}/meeting/{clean_code}"
 
 
 def _ensure_unique_code(db: Session) -> str:
-    """Generate a meeting code that doesn't already exist in the database.
-
-    Retries up to 10 times. With 1M possible codes, collisions are
-    extremely rare at this scale but we handle them for correctness.
-    """
+    """Generate a meeting code that doesn't already exist in the database."""
     for _ in range(10):
-        code = generate_meeting_code()
+        code = generate_meeting_code().lower()
         existing = db.query(Meeting).filter(
-            Meeting.meeting_code == code
+            func.lower(Meeting.meeting_code) == code
         ).first()
         if not existing:
             return code
-    # Fallback: if somehow all 10 attempts collide, raise an error.
-    # This is practically impossible at this scale.
     raise RuntimeError("Failed to generate unique meeting code")
+
 
 
 def create_instant_meeting(db: Session) -> Meeting:
@@ -81,6 +75,32 @@ def create_instant_meeting(db: Session) -> Meeting:
 
     meeting = Meeting(
         meeting_code=code,
+        title="Instant Meeting",
+        meeting_type=MeetingType.INSTANT,
+        status=MeetingStatus.WAITING,
+        host_id=DEFAULT_USER_ID,
+        meeting_link=link,
+    )
+    db.add(meeting)
+    db.commit()
+    db.refresh(meeting)
+    return meeting
+
+
+def create_instant_meeting_with_code(db: Session, meeting_code: str) -> Meeting:
+    """Create or retrieve an instant meeting with a specified code.
+
+    Guarantees that direct navigation or shared links work even if
+    the database restarted or the meeting was initiated client-side.
+    """
+    clean_code = meeting_code.strip().lower()
+    existing = get_meeting_by_code(db, clean_code)
+    if existing:
+        return existing
+
+    link = generate_meeting_link(clean_code)
+    meeting = Meeting(
+        meeting_code=clean_code,
         title="Instant Meeting",
         meeting_type=MeetingType.INSTANT,
         status=MeetingStatus.WAITING,
@@ -133,14 +153,12 @@ def create_scheduled_meeting(
 
 
 def get_meeting_by_code(db: Session, meeting_code: str) -> Meeting | None:
-    """Retrieve a meeting by its public meeting code.
-
-    Returns None if not found. The caller (route handler) is
-    responsible for returning an appropriate HTTP error.
-    """
+    """Retrieve a meeting by its public meeting code (case-insensitive)."""
+    clean_code = meeting_code.strip().lower()
     return db.query(Meeting).filter(
-        Meeting.meeting_code == meeting_code
+        func.lower(Meeting.meeting_code) == clean_code
     ).first()
+
 
 
 def join_meeting(

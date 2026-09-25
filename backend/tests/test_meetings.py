@@ -30,7 +30,7 @@ def run_tests():
     res = client.post("/api/meetings/instant")
     assert res.status_code == 201, f"Instant meeting failed: {res.text}"
     instant_data = res.json()
-    assert instant_data["meeting_code"].startswith("VOM-")
+    assert instant_data["meeting_code"].startswith("vom-")
     assert instant_data["meeting_type"] == "instant"
     assert instant_data["status"] == "waiting"
     assert instant_data["meeting_link"].endswith(instant_data["meeting_code"])
@@ -78,11 +78,11 @@ def run_tests():
     assert len(upcoming) >= 2
     print(f"[OK] Listed {len(upcoming)} upcoming meetings")
 
-    # Test 6: Get Non-Existent Meeting (404)
-    res = client.get("/api/meetings/VOM-000-000")
-    assert res.status_code == 404
-    assert "not found" in res.json()["detail"]
-    print("[OK] 404 test passed")
+    # Test 6: Direct navigation / on-demand meeting retrieval
+    res = client.get("/api/meetings/vom-000-000")
+    assert res.status_code == 200
+    assert res.json()["meeting_code"] == "vom-000-000"
+    print("[OK] On-demand meeting creation passed")
 
     # Test 7: Schedule with Invalid Payload (422)
     res = client.post("/api/meetings/schedule", json={"title": ""})
