@@ -137,10 +137,27 @@ export default function MeetingRoomPage() {
 
     async function initMedia() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: true,
-        });
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: true,
+          });
+        } catch {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: true,
+            });
+          } catch {
+            // If mic or camera individually failed, attempt video only
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            });
+          }
+        }
+
         streamInstance = stream;
         setLocalStream(stream);
 
@@ -149,6 +166,7 @@ export default function MeetingRoomPage() {
         }
       } catch (err) {
         console.warn("Media devices not accessible or permission denied:", err);
+        showToast("error", "Camera or microphone permission required. Please allow device access.");
       }
     }
 
@@ -175,6 +193,7 @@ export default function MeetingRoomPage() {
       remoteVideoRef.current.srcObject = remoteStream;
     }
   }, [remoteStream]);
+
 
   // 3. Call timer
   useEffect(() => {
@@ -450,6 +469,9 @@ export default function MeetingRoomPage() {
           videoSender.replaceTrack(cameraTrack);
         }
       }
+      if (localCallVideoRef.current && localStream) {
+        localCallVideoRef.current.srcObject = localStream;
+      }
       setIsScreenSharing(false);
     } else {
       try {
@@ -457,8 +479,16 @@ export default function MeetingRoomPage() {
         const screenTrack = screenStream.getVideoTracks()[0];
         screenTrackRef.current = screenTrack;
 
+        // Preview shared screen on local video element
+        if (localCallVideoRef.current) {
+          localCallVideoRef.current.srcObject = screenStream;
+        }
+
         screenTrack.onended = () => {
           setIsScreenSharing(false);
+          if (localCallVideoRef.current && localStream) {
+            localCallVideoRef.current.srcObject = localStream;
+          }
           if (pcRef.current && localStream) {
             const cameraTrack = localStream.getVideoTracks()[0];
             const senders = pcRef.current.getSenders();
@@ -483,6 +513,7 @@ export default function MeetingRoomPage() {
       }
     }
   };
+
 
   // Copy shareable public link
   const handleCopyLink = () => {
@@ -599,12 +630,18 @@ export default function MeetingRoomPage() {
             <div className="relative w-full aspect-video rounded-3xl bg-slate-900/90 border border-white/10 shadow-2xl overflow-hidden flex flex-col items-center justify-center group">
               {/* Actual Camera Video Stream */}
               <video
-                ref={localPreviewRef}
+                ref={(el) => {
+                  localPreviewRef.current = el;
+                  if (el && localStream && el.srcObject !== localStream) {
+                    el.srcObject = localStream;
+                  }
+                }}
                 autoPlay
                 playsInline
                 muted
                 className={`w-full h-full object-cover ${isVideoEnabled ? "block" : "hidden"}`}
               />
+
 
               {!isVideoEnabled && (
                 <div className="space-y-3 text-center">
@@ -745,12 +782,21 @@ export default function MeetingRoomPage() {
             {/* 1. Local Participant Video Tile */}
             <div className="relative w-full h-full min-h-[240px] rounded-2xl bg-slate-900/90 border border-white/10 shadow-xl overflow-hidden flex items-center justify-center group">
               <video
-                ref={localCallVideoRef}
+                ref={(el) => {
+                  localCallVideoRef.current = el;
+                  const activeStream = isScreenSharing && screenTrackRef.current
+                    ? new MediaStream([screenTrackRef.current])
+                    : localStream;
+                  if (el && activeStream && el.srcObject !== activeStream) {
+                    el.srcObject = activeStream;
+                  }
+                }}
                 autoPlay
                 playsInline
                 muted
-                className={`w-full h-full object-cover ${isVideoEnabled ? "block" : "hidden"}`}
+                className={`w-full h-full object-cover ${isVideoEnabled || isScreenSharing ? "block" : "hidden"}`}
               />
+
 
               {!isVideoEnabled && (
                 <div className="space-y-2 text-center">
@@ -773,11 +819,17 @@ export default function MeetingRoomPage() {
               {remoteStream ? (
                 <>
                   <video
-                    ref={remoteVideoRef}
+                    ref={(el) => {
+                      remoteVideoRef.current = el;
+                      if (el && remoteStream && el.srcObject !== remoteStream) {
+                        el.srcObject = remoteStream;
+                      }
+                    }}
                     autoPlay
                     playsInline
                     className={`w-full h-full object-cover ${!remoteVideoMuted ? "block" : "hidden"}`}
                   />
+
                   {remoteVideoMuted && (
                     <div className="space-y-2 text-center">
                       <div className="w-20 h-20 rounded-full bg-purple-600/30 border border-purple-400/30 flex items-center justify-center text-3xl font-bold text-purple-200 mx-auto">
