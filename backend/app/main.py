@@ -1,3 +1,15 @@
+"""Voom — FastAPI application entry point.
+
+This module is responsible ONLY for:
+- Creating the FastAPI application instance
+- Configuring middleware (CORS)
+- Registering routers
+- Managing application lifespan (database setup)
+
+All endpoint logic lives in the routes/ package.
+All business logic lives in the services/ package.
+"""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -5,6 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
+from app.routes.health import router as health_router
+from app.routes.meetings import router as meetings_router
 
 
 @asynccontextmanager
@@ -35,12 +49,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/api/health")
-def health_check():
-    """Health check endpoint for monitoring and deployment verification."""
-    return {
-        "status": "healthy",
-        "app": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-    }
+# Register routers — each router handles a specific resource/concern.
+# This keeps main.py focused on configuration, not endpoint logic.
+app.include_router(health_router)
+app.include_router(meetings_router)
