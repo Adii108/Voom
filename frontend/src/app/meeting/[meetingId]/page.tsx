@@ -243,10 +243,13 @@ export default function MeetingRoomPage() {
     [meetingCode, participantId, displayName]
   );
 
+  const remoteStreamAccumulatorRef = useRef<MediaStream>(new MediaStream());
+
   const drainIceCandidates = useCallback(async (pc: RTCPeerConnection) => {
-    while (pendingIceCandidatesRef.current.length > 0) {
-      const candidate = pendingIceCandidatesRef.current.shift();
-      if (candidate) {
+    const candidates = [...pendingIceCandidatesRef.current];
+    pendingIceCandidatesRef.current = [];
+    for (const candidate of candidates) {
+      if (candidate && (candidate.candidate || candidate.sdpMid !== undefined)) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (e) {
@@ -260,41 +263,94 @@ export default function MeetingRoomPage() {
     if (pcRef.current) return pcRef.current;
 
     const pc = createPeerConnection({
-      onTrack: (remoteMediaStream) => {
-        setRemoteStream(remoteMediaStream);
+      onTrack: (incomingStream) => {
+        // Collect tracks into our persistent accumulator
+        incomingStream.getTracks().forEach((track) => {
+          const currentTracks = remoteStreamAccumulatorRef.current.getTracks();
+          if (!currentTracks.some((t) => t.id === track.id)) {
+            remoteStreamAccumulatorRef.current.addTrack(track);
+          }
+        });
+
+        const activeTracks = remoteStreamAccumulatorRef.current.getTracks();
+        const freshStream = new MediaStream(activeTracks);
+        setRemoteStream(freshStream);
         setConnectionState("connected");
+
+        // Force playback on remote video element (vital for mobile/iOS Safari autoplay policies)
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = freshStream;
+          remoteVideoRef.current.play().catch((err) => {
+            console.warn("Remote video auto-play prevented:", err);
+          });
+        }
       },
       onIceCandidate: (candidate) => {
-        sendSignalMessage("ice-candidate", candidate.toJSON());
+        if (candidate && candidate.candidate) {
+          sendSignalMessage("ice-candidate", candidate.toJSON());
+        }
       },
       onConnectionStateChange: (state) => {
         setConnectionState(state);
-        if (state === "disconnected" || state === "failed" || state === "closed") {
-          setRemoteStream(null);
+        if (state === "connected") {
+          showToast("success", "Connected to peer");
+        } else if (state === "disconnected" || state === "failed" || state === "closed") {
+          // Keep stream unless closed
+          if (state === "closed") {
+            setRemoteStream(null);
+            remoteStreamAccumulatorRef.current = new MediaStream();
+          }
         }
       },
     });
 
-    let hasTracks = false;
-    if (localStream) {
-      localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, localStream);
-        hasTracks = true;
-      });
+    // Ensure audio & video transceivers exist with sendrecv so offers/answers negotiate both ways cleanly
+    try {
+      const transceivers = pc.getTransceivers();
+      if (!transceivers.some((t) => t.receiver.track.kind === "video")) {
+        pc.addTransceiver("video", { direction: "sendrecv" });
+      }
+      if (!transceivers.some((t) => t.receiver.track.kind === "audio")) {
+        pc.addTransceiver("audio", { direction: "sendrecv" });
+      }
+    } catch (e) {
+      console.warn("Transceiver initialization:", e);
     }
 
-    if (!hasTracks) {
-      try {
-        pc.addTransceiver("video", { direction: "recvonly" });
-        pc.addTransceiver("audio", { direction: "recvonly" });
-      } catch (e) {
-        console.warn("Transceiver fallback:", e);
-      }
+    // Attach local tracks if available
+    if (localStream) {
+      localStream.getTracks().forEach((track) => {
+        try {
+          pc.addTrack(track, localStream);
+        } catch (e) {
+          console.warn("Add initial track error:", e);
+        }
+      });
     }
 
     pcRef.current = pc;
     return pc;
   }, [localStream, sendSignalMessage]);
+
+  // Synchronize local tracks whenever localStream updates (e.g. mic/cam permission granted after mount)
+  useEffect(() => {
+    if (!pcRef.current || !localStream) return;
+    const pc = pcRef.current;
+    const senders = pc.getSenders();
+
+    localStream.getTracks().forEach((track) => {
+      const sender = senders.find((s) => s.track?.kind === track.kind);
+      if (sender) {
+        sender.replaceTrack(track).catch(() => {});
+      } else {
+        try {
+          pc.addTrack(track, localStream);
+        } catch (e) {
+          console.warn("Error adding local track:", e);
+        }
+      }
+    });
+  }, [localStream]);
 
   const startCallAsInitiator = useCallback(async (targetId?: string | null) => {
     if (isNegotiatingRef.current) return;
@@ -303,7 +359,10 @@ export default function MeetingRoomPage() {
     const pc = getOrCreatePeerConnection();
 
     try {
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
       await pc.setLocalDescription(offer);
       await sendSignalMessage("offer", offer, targetId);
     } catch (err) {
@@ -325,6 +384,25 @@ export default function MeetingRoomPage() {
       try {
         const response = await api.getSignals(meetingCode, participantId, displayName);
         if (!isPolling) return;
+
+        // Auto-negotiate with active peers if not connected yet!
+        if (response.active_peers && response.active_peers.length > 0) {
+          const peer = response.active_peers[0];
+          setRemotePeerName(peer.name || "Participant");
+
+          const isInitiator = participantId < peer.id;
+          const pc = pcRef.current;
+
+          // If we have an active peer and WebRTC is not connected yet, initiate!
+          if (
+            isInitiator &&
+            (!pc || (pc.connectionState !== "connected" && pc.signalingState === "stable")) &&
+            !remoteStream &&
+            !isNegotiatingRef.current
+          ) {
+            await startCallAsInitiator(peer.id);
+          }
+        }
 
         for (const msg of response.messages) {
           if (msg.sender_id === participantId) continue;
@@ -364,6 +442,7 @@ export default function MeetingRoomPage() {
             }
 
             case "ice-candidate": {
+              if (!msg.data) break;
               const pc = getOrCreatePeerConnection();
               if (pc.remoteDescription && pc.remoteDescription.type) {
                 try {
@@ -402,6 +481,7 @@ export default function MeetingRoomPage() {
             case "leave": {
               showToast("info", `${msg.sender_name || "Participant"} left the meeting`);
               setRemoteStream(null);
+              remoteStreamAccumulatorRef.current = new MediaStream();
               setRemotePeerName(null);
               setConnectionState("waiting");
               if (pcRef.current) {
@@ -426,7 +506,8 @@ export default function MeetingRoomPage() {
     return () => {
       isPolling = false;
     };
-  }, [hasJoined, meetingCode, participantId, displayName, sendSignalMessage, startCallAsInitiator, getOrCreatePeerConnection, drainIceCandidates]);
+  }, [hasJoined, meetingCode, participantId, displayName, sendSignalMessage, startCallAsInitiator, getOrCreatePeerConnection, drainIceCandidates, remoteStream]);
+
 
   // Gracefully leave room on tab close
   useEffect(() => {
@@ -947,6 +1028,7 @@ export default function MeetingRoomPage() {
                       remoteVideoRef.current = el;
                       if (el && remoteStream && el.srcObject !== remoteStream) {
                         el.srcObject = remoteStream;
+                        el.play().catch((err) => console.warn("Video play error:", err));
                       }
                     }}
                     autoPlay

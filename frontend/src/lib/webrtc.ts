@@ -8,10 +8,26 @@
  */
 
 const baseIceServers: RTCIceServer[] = [
+  // Google Public STUN
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun2.l.google.com:19302" },
+  { urls: "stun:stun3.l.google.com:19302" },
+  { urls: "stun:stun4.l.google.com:19302" },
+  // Cloudflare STUN
   { urls: "stun:stun.cloudflare.com:3478" },
+  // Mozilla STUN
+  { urls: "stun:stun.services.mozilla.com:3478" },
+  // Public Metered free TURN relay (crucial for connecting mobile data to home Wi-Fi across symmetric NAT)
+  {
+    urls: [
+      "turn:standard.relay.metered.ca:80",
+      "turn:standard.relay.metered.ca:443",
+      "turn:standard.relay.metered.ca:443?transport=tcp",
+    ],
+    username: "e229bbad56f8f5339d6756ee",
+    credential: "V476WkWfE8k5N5z+",
+  },
 ];
 
 if (process.env.NEXT_PUBLIC_TURN_URL) {
@@ -21,6 +37,7 @@ if (process.env.NEXT_PUBLIC_TURN_URL) {
     credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
   });
 }
+
 
 export const RTC_CONFIG: RTCConfiguration = {
   iceServers: baseIceServers,
