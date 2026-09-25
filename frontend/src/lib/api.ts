@@ -8,9 +8,15 @@
  * On the server (SSR): falls back to NEXT_PUBLIC_API_URL or http://127.0.0.1:8000.
  */
 
+const RENDER_BACKEND_URL = "https://voom-backend-hkh3.onrender.com";
+
 const rawBase =
   process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== "undefined" ? "" : "http://127.0.0.1:8000");
+  (typeof window !== "undefined"
+    ? (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+        ? ""
+        : RENDER_BACKEND_URL)
+    : RENDER_BACKEND_URL);
 const API_BASE = rawBase.replace(/\/+$/, "");
 
 export function generateUniqueRoomCode(): string {
