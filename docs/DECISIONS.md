@@ -284,3 +284,60 @@ Each entry documents a significant architectural or technology decision, includi
 **Trade-offs:**
 - All meetings appear to be created by the same user
 - No multi-user isolation
+
+---
+
+## D014: Service Layer Pattern (Thin Controllers)
+
+**Decision:** Separate HTTP route handlers (`app/routes/meetings.py`) from domain business logic (`app/services/meeting_service.py`).
+
+**Alternatives considered:**
+1. Fat route handlers (putting SQLAlchemy queries and business logic directly in FastAPI routes)
+2. Repository pattern with abstract base interfaces
+
+**Why this approach:**
+- Keeps API route handlers declarative and focused only on HTTP concerns (status codes, dependency injection, schema validation)
+- Isolates business rules (unique meeting code collision retry loop, default status transitions, host assignment)
+- Highly testable: business logic can be tested directly without simulating HTTP requests
+- Simpler and more practical than the heavy repository pattern while providing 90% of the benefits
+
+**Trade-offs:**
+- Adds an extra layer and file per domain entity
+
+---
+
+## D015: Interactive Pre-Join Lobby & In-Room State Machine
+
+**Decision:** Implement a dual-state meeting room experience: Pre-Join Lobby with device permissions and name prompt, transitioning into an interactive In-Call Room with local/remote video tiles, call timer, media toggles, and side drawer.
+
+**Alternatives considered:**
+1. Direct join without lobby preview
+2. Separate URL for lobby (e.g., `/meeting/lobby/[id]`)
+
+**Why this approach:**
+- Mirrors production video conferencing UX (Google Meet, Zoom, MS Teams)
+- Allows participants to check camera/mic status and select their display name before entering
+- Single dynamic route `/meeting/[meetingId]` keeps URLs clean and shareable without messy route transitions
+- Provides interactive media controls (mute/unmute, camera on/off, screen share state, live elapsed timer, real-time in-room chat)
+
+**Trade-offs:**
+- Meeting room page manages both lobby and in-call states in a single cohesive client component
+
+---
+
+## D016: Glassmorphic Dark Design System & Tailwind v4
+
+**Decision:** Build a bespoke dark theme using CSS custom properties, glassmorphism blur filters, and Tailwind v4.
+
+**Alternatives considered:**
+1. Pre-built UI component libraries (MUI, Shadcn/ui, Ant Design)
+2. Light mode default
+
+**Why this approach:**
+- Video conferencing applications are overwhelmingly preferred in dark mode to reduce eye strain and focus attention on video feeds
+- Bespoke glassmorphism styling gives the application a state-of-the-art, premium look
+- Custom reusable component primitives (`Button`, `Input`, `Card`, `Modal`, `Toast`) ensure exact adherence to design requirements without third-party bloat
+
+**Trade-offs:**
+- Backdrop blur requires modern browser GPU support
+
