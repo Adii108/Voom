@@ -8,9 +8,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Voom — Modern Video Conferencing",
-  description:
-    "Instant and scheduled video meetings. Enterprise-grade quality, zero friction.",
+  title: "Zoom Workplace",
+  description: "Zoom Web Client public UI",
 };
 
 export default function RootLayout({
@@ -20,7 +19,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} font-sans antialiased bg-[#0B0F19] text-gray-100 min-h-screen selection:bg-indigo-500/30 selection:text-indigo-200`}>
+      <body
+        className={`${inter.variable} font-sans antialiased bg-white text-[#2A2B2D] min-h-screen selection:bg-blue-500/20 selection:text-blue-700`}
+      >
         {children}
       </body>
     </html>

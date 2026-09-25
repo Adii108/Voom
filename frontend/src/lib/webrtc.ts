@@ -1,17 +1,29 @@
 /**
- * WebRTC and ICE Configuration for Voom.
+ * WebRTC and ICE Configuration for Zoom Clone.
  *
  * Includes public STUN servers for NAT traversal across different
  * Wi-Fi networks and mobile carriers (Google + Cloudflare).
+ * Supports optional production TURN server via environment variables:
+ * NEXT_PUBLIC_TURN_URL, NEXT_PUBLIC_TURN_USERNAME, NEXT_PUBLIC_TURN_CREDENTIAL
  */
 
+const baseIceServers: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" },
+];
+
+if (process.env.NEXT_PUBLIC_TURN_URL) {
+  baseIceServers.push({
+    urls: process.env.NEXT_PUBLIC_TURN_URL,
+    username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+    credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+  });
+}
+
 export const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun.cloudflare.com:3478" },
-  ],
+  iceServers: baseIceServers,
   iceCandidatePoolSize: 10,
 };
 

@@ -1,27 +1,29 @@
-# Voom — Video Conferencing Platform
+# Voom — Zoom Workplace Clone (SDE Fullstack Project)
 
-A modern, high-performance video conferencing web application inspired by Zoom's simplicity and enterprise-grade aesthetics. Built for the Scaler AI Labs technical evaluation.
-
----
-
-## 🌟 Key Features
-
-- **⚡ Instant Meetings**: Generate a unique, shareable meeting code (`VOM-XXX-XXX`) and direct link with a single click.
-- **📅 Scheduled Sessions**: Plan meetings ahead with title, description, scheduled date/time, and duration.
-- **🔑 Fast Join**: Direct meeting join via code or shared URL with custom display names.
-- **🎥 Interactive Pre-Join Lobby**: Camera & microphone preview controls and name prompt before entering the room.
-- **🖥️ In-Call Meeting Room**:
-  - Multi-participant video grid layout with active tags
-  - Audio and Video mute/unmute toggles with visual states
-  - Screen share mode toggle
-  - In-meeting chat drawer for live messaging
-  - Participants panel
-  - Real-time elapsed call timer
-- **✨ Sleek Glassmorphic Dark UI**: Custom-tailored dark mode palette, backdrop blur panels, micro-animations, and responsive layouts.
+A functional, high-fidelity video conferencing web application clone of **Zoom Workplace** that replicates Zoom's visual design, user experience, and core meeting workflows. Built for the SDE Fullstack evaluation.
 
 ---
 
-## 🛠️ Tech Stack
+## 🌐 Live Deployments
+
+- **Frontend (Vercel)**: Deployed & connected to Render backend
+- **Backend (Render)**: [`https://voom-backend-hkh3.onrender.com`](https://voom-backend-hkh3.onrender.com)
+- **API Swagger Docs**: [`https://voom-backend-hkh3.onrender.com/docs`](https://voom-backend-hkh3.onrender.com/docs)
+- **GitHub Repository**: Public repository ready for evaluation
+
+---
+
+## 🌟 Core Features (Must-Have Checklist)
+
+| Feature | Requirement | Status | Implementation Details |
+| :--- | :--- | :--- | :--- |
+| **1. Landing Dashboard** | Clean professional Zoom Workplace UI, Navbar with profile/settings, 4 Action Buttons, Upcoming & Recent meetings | ✅ Done | Exact Zoom Workplace dashboard with Orange **New Meeting**, Blue **Join**, Blue **Schedule**, Blue **Share Screen**, live digital clock, and real-time meeting lists from SQLite. |
+| **2. Instant Meetings** | Create instantly, unique Meeting ID, shareable invite link, redirect to meeting room | ✅ Done | Instant creation generates unique high-entropy IDs (e.g., `vom-xxx-xxx-xxx`), provides one-click copyable invite links, and routes directly to the in-call room. |
+| **3. Join Meeting** | Join using Meeting ID or invite link, enter display name, validate existence | ✅ Done | Zoom styled join modal supporting direct code/link parsing, custom display name, audio/video toggle preferences, and backend validation. |
+| **4. Schedule Meetings** | Title, description, date/time, duration, auto-generate link, store in DB, show in Upcoming | ✅ Done | Full Zoom Schedule modal saving to SQLite database via `POST /api/meetings/schedule`, automatically reflected in the Upcoming Meetings section. |
+| **5. Live Video Room** | Camera/mic toggles, screen share, participant management, live chat, leave meeting | ✅ Done | WebRTC multi-peer peer-to-peer conferencing with Google/Cloudflare STUN, dual signaling (WebSocket + HTTP fallback), screen sharing, participants drawer, and live chat. |
+| **6. Database & Seed Data** | Custom SQLite schema with models and initial seed data | ✅ Done | Normalized `User`, `Meeting`, and `Participant` tables seeded automatically on startup with upcoming and recent meetings. |
+
 
 | Layer | Technology | Rationale |
 | :--- | :--- | :--- |

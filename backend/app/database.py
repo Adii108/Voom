@@ -40,26 +40,101 @@ DEFAULT_USER_ID = 1
 
 
 def seed_default_user():
-    """Create a default user if the users table is empty.
+    """Create a default user and sample meetings if tables are empty.
 
-    This is called during application startup. The default user
-    acts as the "logged-in" user for all operations since the
-    assignment does not require authentication.
-
+    This is called during application startup to satisfy the assignment
+    requirement: "Sample Data: Seed your database."
     The function is idempotent — safe to call on every startup.
     """
-    # Import here to avoid circular imports (models import Base from this module)
+    from datetime import datetime, timedelta
     from app.models.user import User
+    from app.models.meeting import Meeting, MeetingType, MeetingStatus
+    from app.config import settings
 
     db = SessionLocal()
     try:
-        existing = db.query(User).filter(User.id == DEFAULT_USER_ID).first()
-        if not existing:
-            default_user = User(
-                name="Default User",
-                email="user@voom.app",
+        user = db.query(User).filter(User.id == DEFAULT_USER_ID).first()
+        if not user:
+            user = User(
+                name="Alex Morgan",
+                email="alex.morgan@zoom.us",
             )
-            db.add(default_user)
+            db.add(user)
             db.commit()
+            db.refresh(user)
+
+        # Seed sample meetings if none exist or recent is empty
+        recent_count = db.query(Meeting).filter(Meeting.status.in_([MeetingStatus.ENDED, MeetingStatus.ACTIVE])).count()
+        if recent_count == 0:
+            now = datetime.now()
+            frontend_url = settings.FRONTEND_URL.rstrip("/")
+            
+            sample_meetings = [
+                Meeting(
+                    meeting_code="vom-842-910-sync",
+                    title="Weekly Team Sync & Sprint Review",
+                    description="Review sprint deliverables, unblock team, and align on upcoming roadmap goals.",
+                    meeting_type=MeetingType.SCHEDULED,
+                    status=MeetingStatus.WAITING,
+                    host_id=user.id,
+                    scheduled_at=now + timedelta(hours=3),
+                    duration=45,
+                    meeting_link=f"{frontend_url}/meeting/vom-842-910-sync",
+                ),
+                Meeting(
+                    meeting_code="vom-319-582-ui",
+                    title="Design System & UI Component Alignment",
+                    description="Finalize Zoom Workplace web client components and responsive layouts.",
+                    meeting_type=MeetingType.SCHEDULED,
+                    status=MeetingStatus.WAITING,
+                    host_id=user.id,
+                    scheduled_at=now + timedelta(days=1, hours=2),
+                    duration=30,
+                    meeting_link=f"{frontend_url}/meeting/vom-319-582-ui",
+                ),
+                Meeting(
+                    meeting_code="vom-501-724-arch",
+                    title="Frontend Architecture & WebRTC Deep Dive",
+                    description="Evaluate WebRTC peer connection stability, ICE gathering, and STUN/TURN configs.",
+                    meeting_type=MeetingType.SCHEDULED,
+                    status=MeetingStatus.WAITING,
+                    host_id=user.id,
+                    scheduled_at=now + timedelta(days=2, hours=4),
+                    duration=60,
+                    meeting_link=f"{frontend_url}/meeting/vom-501-724-arch",
+                ),
+                Meeting(
+                    meeting_code="vom-109-847-hist",
+                    title="Daily Engineering Standup",
+                    description="Quick 15-minute daily sync.",
+                    meeting_type=MeetingType.INSTANT,
+                    status=MeetingStatus.ENDED,
+                    host_id=user.id,
+                    scheduled_at=None,
+                    duration=15,
+                    meeting_link=f"{frontend_url}/meeting/vom-109-847-hist",
+                ),
+                Meeting(
+                    meeting_code="vom-662-411-past",
+                    title="Product Architecture & Demo Review",
+                    description="Full platform walkthrough with stakeholders.",
+                    meeting_type=MeetingType.SCHEDULED,
+                    status=MeetingStatus.ENDED,
+                    host_id=user.id,
+                    scheduled_at=now - timedelta(days=1),
+                    duration=45,
+                    meeting_link=f"{frontend_url}/meeting/vom-662-411-past",
+                ),
+            ]
+            for m in sample_meetings:
+                existing = db.query(Meeting).filter(Meeting.meeting_code == m.meeting_code).first()
+                if not existing:
+                    db.add(m)
+            db.commit()
+
+    except Exception as e:
+        db.rollback()
+        print(f"Error seeding database: {e}")
     finally:
         db.close()
+

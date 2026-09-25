@@ -39,3 +39,8 @@ npm-debug.log*
 # Auto-generated agent rules (Next.js)
 AGENTS.md
 CLAUDE.md
+
+# Extracted UI Spec & symlinks
+zoom-ai-spec/
+zoom-clone/
+
