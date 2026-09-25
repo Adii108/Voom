@@ -8,15 +8,19 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Voom — Video Conferencing",
+  title: "Voom — Modern Video Conferencing",
   description:
-    "A modern video conferencing platform. Create, join, and schedule meetings with ease.",
+    "Instant and scheduled video meetings. Enterprise-grade quality, zero friction.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} font-sans antialiased bg-[#0B0F19] text-gray-100 min-h-screen selection:bg-indigo-500/30 selection:text-indigo-200`}>
         {children}
       </body>
     </html>
