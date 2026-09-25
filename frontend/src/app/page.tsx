@@ -158,12 +158,17 @@ export default function DashboardPage() {
     }
   };
 
-  const handleCopyLink = (code: string, link: string) => {
-    navigator.clipboard.writeText(link);
+  const handleCopyLink = (code: string, fallbackLink?: string) => {
+    const publicUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/meeting/${code}`
+        : fallbackLink || code;
+    navigator.clipboard.writeText(publicUrl);
     setCopiedCode(code);
     showToast("info", "Meeting link copied to clipboard");
     setTimeout(() => setCopiedCode(null), 2000);
   };
+
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0B0F19]">

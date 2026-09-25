@@ -20,6 +20,7 @@ from app.database import Base, engine, seed_default_user
 import app.models  # noqa: F401 — import so Base.metadata discovers all tables
 from app.routes.health import router as health_router
 from app.routes.meetings import router as meetings_router
+from app.routes.signaling import router as signaling_router
 
 
 @asynccontextmanager
@@ -41,17 +42,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware — required because the Next.js frontend and FastAPI
-# backend run on different origins (ports in dev, domains in prod).
+# CORS middleware — allows localhost origins and Cloudflare tunnel public origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=r"^https:\/\/.*\.trycloudflare\.com$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Register routers — each router handles a specific resource/concern.
-# This keeps main.py focused on configuration, not endpoint logic.
 app.include_router(health_router)
 app.include_router(meetings_router)
+app.include_router(signaling_router)

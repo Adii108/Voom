@@ -1,8 +1,17 @@
 /**
  * API Client for interacting with the Voom FastAPI backend.
+ *
+ * In the browser: uses relative URLs ("") so requests automatically go
+ * to the current origin (localhost:3000 or the public Cloudflare tunnel).
+ * Next.js rewrites in next.config.ts reverse-proxy /api to FastAPI on port 8000.
+ *
+ * On the server (SSR): falls back to NEXT_PUBLIC_API_URL or http://127.0.0.1:8000.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const API_BASE =
+  typeof window !== "undefined"
+    ? ""
+    : process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 export interface Participant {
   id: number;
@@ -34,6 +43,14 @@ export interface SchedulePayload {
   description?: string;
   scheduled_at: string;
   duration: number;
+}
+
+export interface SignalMessagePayload {
+  sender_id: string;
+  sender_name: string;
+  target_id?: string | null;
+  type: string;
+  data?: any;
 }
 
 type None = null;
@@ -102,5 +119,36 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ display_name: displayName }),
       }
+    ),
+
+  /** Post a WebRTC signaling message */
+  sendSignal: (code: string, payload: SignalMessagePayload) =>
+    request<{ status: string; recipients: number; active_peers: Array<{ id: string; name: string }> }>(
+      `/api/meetings/${encodeURIComponent(code)}/signal`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  /** Poll for pending WebRTC signaling messages */
+  getSignals: (code: string, participantId: string, participantName: string) =>
+    request<{
+      messages: SignalMessagePayload[];
+      active_peers: Array<{ id: string; name: string }>;
+      server_time: number;
+    }>(
+      `/api/meetings/${encodeURIComponent(code)}/signal?participant_id=${encodeURIComponent(
+        participantId
+      )}&participant_name=${encodeURIComponent(participantName)}`
+    ),
+
+  /** Leave meeting room signaling */
+  leaveRoom: (code: string, participantId: string) =>
+    request<{ status: string }>(
+      `/api/meetings/${encodeURIComponent(code)}/leave?participant_id=${encodeURIComponent(
+        participantId
+      )}`,
+      { method: "POST" }
     ),
 };
