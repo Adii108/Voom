@@ -42,15 +42,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware — allows localhost origins and Cloudflare tunnel public origins
+# CORS middleware — allows localhost origins, Vercel deployments, and Cloudflare tunnels
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_origin_regex=r"^https:\/\/.*\.trycloudflare\.com$",
+    allow_origin_regex=r"^https:\/\/.*(\.vercel\.app|\.trycloudflare\.com)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Register routers — each router handles a specific resource/concern.
 app.include_router(health_router)
